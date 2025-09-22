@@ -1,0 +1,10 @@
+services:
+  web:
+    build: ./Neorestaurant_app
+    container_name: flask_app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./Neorestaurant_app:/app
+    environment:
+      - FLASK_ENV=development
