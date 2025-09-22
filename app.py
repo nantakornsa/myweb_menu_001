@@ -50,6 +50,8 @@ def admin():
         new_name = request.form.get("name")
         new_price = request.form.get("price")
         new_category = request.form.get("category")
+        
+        
         if new_name and new_price and new_category:
             new_id = max(item["id"] for item in menu_items) + 1 if menu_items else 1
             menu_items.append({
