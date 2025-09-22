@@ -1,69 +1,92 @@
-from flask import Flask, render_template, request, redirect, url_for
+import json
+from flask import Flask, render_template, request, redirect, url_for, flash
 
 app = Flask(__name__)
 app.secret_key = "secret_key"
 
-# Database จำลอง
-menu_items = [
-    {"id": 1, "name": "ข้าวกะเพรา", "price": 50, "category": "ข้าว"},
-    {"id": 2, "name": "ข้าวผัดหมู", "price": 50, "category": "ข้าว"},
-    {"id": 4, "name": "ข้าวแกงเขียวหวานไก่", "price": 50, "category": "ข้าว"},
-    {"id": 5, "name": "ข้าวหมูกรอบ", "price": 50, "category": "ข้าว"},
-    {"id": 6, "name": "ข้าวมันไก่", "price": 50, "category": "ข้าว"},
-    {"id": 7, "name": "น้ำเปล่า(ขวดใหญ่)", "price": 20, "category": "เครื่องดื่ม"},
-    {"id": 8, "name": "น้ำอัดลม(ขวดใหญ่)", "price": 30, "category": "เครื่องดื่ม"}
-]
+MENU_FILE = "menu.json"
+ADMIN_FILE = "admin.json"
 
-# Admin login ข้อมูลจำลอง
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "1234"
+# --- ฟังก์ชันช่วยเหลือ ---
+def load_menu():
+    try:
+        with open(MENU_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
 
-# หน้าแรก - ลูกค้า
+def save_menu(menu_items):
+    with open(MENU_FILE, "w", encoding="utf-8") as f:
+        json.dump(menu_items, f, ensure_ascii=False, indent=4)
+
+def get_next_id(menu_items):
+    return max((item["id"] for item in menu_items), default=0) + 1
+
+def load_admin():
+    """โหลดข้อมูล admin จาก admin.json"""
+    try:
+        with open(ADMIN_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {"username": "admin", "password": "1234"}  # default
+
+# --- หน้าแรก (ลูกค้า) ---
 @app.route("/")
 def index():
     sort_by = request.args.get("sort")
-    items = menu_items.copy()
+    items = load_menu()
     if sort_by == "asc":
         items.sort(key=lambda x: x["price"])
     elif sort_by == "desc":
         items.sort(key=lambda x: x["price"], reverse=True)
     return render_template("index.html", menu_items=items)
 
-# หน้า login admin
+# --- หน้า login admin ---
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
+    admin_data = load_admin()  # โหลด admin จาก JSON
+
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
-        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        if username == admin_data.get("username") and password == admin_data.get("password"):
             return redirect(url_for("admin"))
-        else:
-            return "Invalid credentials"
+        flash("Invalid username or password", "error")
     return render_template("login.html")
 
-# หน้า admin - เพิ่ม/ลบเมนู
+# --- หน้า admin ---
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
-    global menu_items
+    menu_items = load_menu()
+
     if request.method == "POST":
         # เพิ่มเมนู
         new_name = request.form.get("name")
         new_price = request.form.get("price")
         new_category = request.form.get("category")
-        
-        
+
         if new_name and new_price and new_category:
-            new_id = max(item["id"] for item in menu_items) + 1 if menu_items else 1
-            menu_items.append({
-                "id": new_id,
-                "name": new_name,
-                "price": int(new_price),
-                "category": new_category
-            })
+            try:
+                new_price = int(new_price)
+                new_item = {
+                    "id": get_next_id(menu_items),
+                    "name": new_name,
+                    "price": new_price,
+                    "category": new_category
+                }
+                menu_items.append(new_item)
+                save_menu(menu_items)
+                flash(f"Added '{new_name}' successfully.", "success")
+            except ValueError:
+                flash("Price must be a number.", "error")
+
         # ลบเมนู
         delete_id = request.form.get("delete_id")
         if delete_id:
             menu_items = [item for item in menu_items if str(item["id"]) != delete_id]
+            save_menu(menu_items)
+            flash(f"Deleted item ID {delete_id}.", "success")
+
     return render_template("admin.html", menu_items=menu_items)
 
 if __name__ == "__main__":
